@@ -1,103 +1,119 @@
-//
-// Created by tomas
-//
-
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-
-#endif
-
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/select.h>
 #include <string.h>
 #include <unistd.h>
 
-#define BUFFLEN 1024
+#define BUFF_LEN 1024
+#define MAX_CLIENTS 10
+
+int findEmptyUser(const int client_sockets[]) {
+    int i;
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        if (client_sockets[i] == -1) {
+            return i;
+        }
+    }
+    return -1;
+}
 
 int main(int argc, char *argv[]) {
+    unsigned int port;
+    unsigned int addrLen;
 
-    char *ip = "127.0.0.1";
-    int port;
+    int l_socket;
+    int client_sockets[MAX_CLIENTS];
+    int maxfd = 0;
+    int i;
 
-    int server_socket;
-    int client_socket;
-
+    fd_set read_set;
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
-    socklen_t addr_size;
-    char buffer[BUFFLEN];
-    int n;
+    char buffer[BUFF_LEN];
 
     if (argc != 2) {
-        printf("USAGE: %s <port>\n", argv[0]);
-        exit(1);
+        fprintf(stderr, "USAGE: %s <port>\n", argv[0]);
+        return -1;
     }
-
     port = atoi(argv[1]);
-
     if ((port < 1) || (port > 65535)) {
-        perror("[-] Invalid port specified.\n");
-        exit(1);
+        fprintf(stderr, "ERROR #1: invalid port specified.\n");
+        return -1;
     }
 
-#ifdef _WIN32
-    WSAStartup(MAKEWORD(2,2),&data);
-#endif
-    /*
-     * Creating socket
-     */
-    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("[-] Socket error");
-        exit(1);
+    if ((l_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        fprintf(stderr, "ERROR #2: cannot create listening socket.\n");
+        return -1;
     }
-    printf("[+] TCP server socket created.\n");
 
-    /*
-     * Clean and fill up servers structure
-     */
-    memset(&server_addr, '\0', sizeof(server_addr));
+    memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-
-    server_addr.sin_addr.s_addr = inet_addr(ip);
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(port);
 
-
-    if (bind(server_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-        perror("[-] Bind error");
-        exit(1);
-    }
-    printf("[+] Bind to the port number: %d\n", port);
-
-
-    if(listen(server_socket, 5) < 0) {
-        perror("[-] Error listening.\n");
-        exit(1);
+    if (bind(l_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        fprintf(stderr, "ERROR #3: bind listening socket.\n");
+        return -1;
     }
 
-    printf("Listening...\n");
-    while (1) {
-        addr_size = sizeof(client_addr);
-        client_socket = accept(server_socket, (struct sockaddr *) &client_addr, &addr_size);
-        printf("[+] Client connected.\n");
+    if (listen(l_socket, 5) < 0) {
+        fprintf(stderr, "ERROR #4: error in listen().\n");
+        return -1;
+    }
 
-        bzero(buffer, 1024);
-        recv(client_socket, buffer, sizeof(buffer), 0);
-        printf("Client: %s\n", buffer);
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        client_sockets[i] = -1;
+    }
 
-        bzero(buffer, 1024);
-        strcpy(buffer, "Hi, this is server.\n");
-        printf("Server: %s\n", buffer);
-        send(client_socket, buffer, strlen(buffer), 0);
 
-        close(client_socket);
+    while(1) {
+        FD_ZERO(&read_set);
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (client_sockets[i] != -1) {
+                FD_SET(client_sockets[i], &read_set);
+                if (client_sockets[i] > maxfd) {
+                    maxfd = client_sockets[i];
+                }
+            }
+        }
+        FD_SET(l_socket, &read_set);
+        if (l_socket > maxfd) {
+            maxfd = l_socket;
+        }
 
-        printf("[+] Client disconnected.\n\n");
+        select(maxfd + 1, &read_set, NULL, NULL, NULL);
+
+        if (FD_ISSET(l_socket, &read_set)) {
+            int client_id = findEmptyUser(client_sockets);
+            if (client_id != -1) {
+                addrLen = sizeof(client_addr);
+                memset(&client_addr, 0, addrLen);
+                client_sockets[client_id] = accept(l_socket,
+                                                   (struct sockaddr *) &client_addr, &addrLen);
+                printf("Connected:  %s\n", inet_ntoa(client_addr.sin_addr));
+            }
+        }
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (client_sockets[i] != -1) {
+                if (FD_ISSET(client_sockets[i], &read_set)) {
+                    memset(&buffer, 0, BUFF_LEN);
+                    int r_len = recv(client_sockets[i], &buffer, BUFF_LEN, 0);
+
+                    int j;
+                    for (j = 0; j < MAX_CLIENTS; j++) {
+                        if (client_sockets[j] != -1) {
+                            int w_len = send(client_sockets[j], buffer, r_len, 0);
+                            if (w_len <= 0) {
+                                close(client_sockets[j]);
+                                client_sockets[j] = -1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     return 0;

@@ -1,74 +1,77 @@
-//
-// Created by tomas
-//
+/*
+ * Echo klientas
+ */
 
-#include <unistd.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/select.h>
+#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <arpa/inet.h>
+#include <unistd.h>
 
-#define BUFFLEN 1024
+#define BUFF_LEN 1024
 
 int main(int argc, char *argv[]) {
-    char *ip = "127.0.0.1";
     unsigned int port;
+    int server_socket;
+    struct sockaddr_in server_addr; // Serverio adreso struktûra
+    fd_set read_set;
 
-    int sock = 0;
-    struct sockaddr_in addr;
-    socklen_t addr_size;
-    char buffer[BUFFLEN];
+    char recv_buff[BUFF_LEN];
+    char send_buff[BUFF_LEN];
+
+    long i;
 
     if (argc != 3) {
         fprintf(stderr, "USAGE: %s <ip> <port>\n", argv[0]);
         exit(1);
     }
     port = atoi(argv[2]);
-
     if ((port < 1) || (port > 65535)) {
-        perror("[-] Invalid port specified.\n");
+        printf("ERROR #1: invalid port specified.\n");
         exit(1);
     }
 
-#ifdef _WIN32
-    WSAStartup(MAKEWORD(2,2),&data);
-#endif
-    if (socket(AF_INET, SOCK_STREAM, 0) < 0) {
-        perror("[-] Socket error");
+    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        fprintf(stderr, "ERROR #2: cannot create socket.\n");
         exit(1);
     }
-    printf("[+] TCP server sock created.\n");
+
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET; // nurodomas protokolas (IP)
+    server_addr.sin_port = htons(port); // nurodomas portas
 
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-
-#ifdef _WIN32
-    servaddr.sin_addr.s_addr = inet_addr(ip);
-#else
-    if (inet_aton(ip, &addr.sin_addr) <= 0) {
-        perror("[-] Invalid remote IP address.\n");
+    if (inet_aton(argv[1], &server_addr.sin_addr) <= 0) {
+        fprintf(stderr, "ERROR #3: Invalid remote IP address.\n");
         exit(1);
     }
-#endif
-
-    if (connect(sock, (struct sockaddr *) &addr, sizeof addr) < 0) {
-        perror("[-] Error connecting to the server.\n");
+    if (connect(server_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        fprintf(stderr, "ERROR #4: error in connect().\n");
+        exit(1);
     }
-    printf("Connected to the server.\n");
 
-    bzero(buffer, 1024);
-    strcpy(buffer, "Hello, this is client.\n");
-    printf("Client: %s\n", buffer);
-    send(sock, buffer, strlen(buffer), 0);
+    memset(&send_buff, 0, BUFF_LEN);
+    fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
+    while (1) {
+        FD_ZERO(&read_set);
+        FD_SET(server_socket, &read_set);
+        FD_SET(0, &read_set);
 
-    bzero(buffer, 1024);
-    recv(sock, buffer, sizeof(buffer), 0);
-    printf("Server: %s\n", buffer);
+        select(server_socket + 1, &read_set, NULL, NULL, NULL);
 
-    close(sock);
+        if (FD_ISSET(server_socket, &read_set)) {
+            memset(&recv_buff, 0, BUFF_LEN);
+            read(server_socket, &recv_buff, BUFF_LEN);
+            printf("%s\n", recv_buff);
+        } else if (FD_ISSET(0, &read_set)) {
+            i = read(0, &send_buff, sizeof(send_buff));
+            write(server_socket, send_buff, i);
+        }
+    }
 
-    printf("Disconnected from the server.\n");
+    close(server_socket);
     return 0;
 }
