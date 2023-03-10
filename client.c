@@ -76,22 +76,15 @@ int main(int argc, char *argv[]) {
     memset(&send_buff, 0, BUFF_LEN);                                // clear memory for send buffer
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);  // make standard input non-blocking
     while (1) {
-        /*
-        * Create and initialize the read_set
-        * with server_socket and standard input
-        */
+        // Create and initialize the read_set with server_socket and standard input
         FD_ZERO(&read_set);
         FD_SET(server_socket, &read_set);
         FD_SET(0, &read_set);   // 0 is the file descriptor for standard input
 
-        /*
-        * Monitor read_set for any incoming data
-        */
+        // Monitor read_set for any incoming data
         select(server_socket + 1, &read_set, NULL, NULL, NULL);
 
-        /*
-        * Check if the incoming data is from the server_socket
-        */
+        // Check if the incoming data is from the server_socket
         if (FD_ISSET(server_socket, &read_set)) {
             memset(&recv_buff, 0, BUFF_LEN);                   // clear the reception buffer
             read(server_socket, &recv_buff, BUFF_LEN);  // read the incoming message from server_socket

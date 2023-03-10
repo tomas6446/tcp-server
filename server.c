@@ -43,33 +43,49 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    /*
+     * Create the listening socket
+     */
     if ((l_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         fprintf(stderr, "ERROR #2: cannot create listening socket.\n");
         exit(1);
     }
 
+    /*
+     * Bind the listening socket to the server address
+     */
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(port);
-
     if (bind(l_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         fprintf(stderr, "ERROR #3: bind listening socket.\n");
         exit(1);
     }
 
+    /*
+     * Start listening for incoming connections
+     */
     if (listen(l_socket, 5) < 0) {
         fprintf(stderr, "ERROR #4: error in listen().\n");
         exit(1);
     }
 
+    /*
+     * Initialize client_sockets array
+     */
     for (i = 0; i < MAX_CLIENTS; i++) {
         client_sockets[i] = -1;
     }
 
-
+    /*
+     * Main loop to accept incoming connections and read messages from clients
+     */
     while (1) {
+        // clear the read_set
         FD_ZERO(&read_set);
+
+        // Add each connected client socket to the read_set and update maxfd
         for (i = 0; i < MAX_CLIENTS; i++) {
             if (client_sockets[i] != -1) {
                 FD_SET(client_sockets[i], &read_set);
@@ -78,13 +94,17 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+
+        // Add the listening socket to the read_set and update maxfd
         FD_SET(l_socket, &read_set);
         if (l_socket > maxfd) {
             maxfd = l_socket;
         }
 
+        // Wait for activity on any of the file descriptors in the read_set
         select(maxfd + 1, &read_set, NULL, NULL, NULL);
 
+        // Check if a new client is connecting and accept the connection
         if (FD_ISSET(l_socket, &read_set)) {
             int client_id = findEmptyUser(client_sockets);
             if (client_id != -1) {
@@ -101,9 +121,7 @@ int main(int argc, char *argv[]) {
                     memset(&buffer, 0, BUFF_LEN);
                     long recv_length = recv(client_sockets[i], &buffer, BUFF_LEN, 0);
 
-                    /*
-                    *  Check if client has disconnected
-                    */
+                    // Check if client has disconnected
                     if (recv_length <= 0) {
                         printf("Disconnected: %s\n", inet_ntoa(client_addr.sin_addr));
                         close(client_sockets[i]); // close client socket
