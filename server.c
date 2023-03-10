@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-    while(1) {
+    while (1) {
         FD_ZERO(&read_set);
         for (i = 0; i < MAX_CLIENTS; i++) {
             if (client_sockets[i] != -1) {
@@ -101,13 +101,23 @@ int main(int argc, char *argv[]) {
                     memset(&buffer, 0, BUFF_LEN);
                     long recv_length = recv(client_sockets[i], &buffer, BUFF_LEN, 0);
 
-                    int j;
-                    for (j = 0; j < MAX_CLIENTS; j++) {
-                        if (client_sockets[j] != -1) {
-                            long send_length = send(client_sockets[j], buffer, recv_length, 0);
-                            if (send_length <= 0) {
-                                close(client_sockets[j]);
-                                client_sockets[j] = -1;
+                    /*
+                    *  Check if client has disconnected
+                    */
+                    if (recv_length <= 0) {
+                        printf("Disconnected: %s\n", inet_ntoa(client_addr.sin_addr));
+                        close(client_sockets[i]); // close client socket
+                        client_sockets[i] = -1;
+                    } else {
+                        int j;
+                        for (j = 0; j < MAX_CLIENTS; j++) {
+                            if (client_sockets[j] != -1) {
+                                printf("Message received from %s: %s\n", inet_ntoa(client_addr.sin_addr), buffer);
+                                long send_length = send(client_sockets[j], buffer, recv_length, 0);
+                                if (send_length <= 0) {
+                                    close(client_sockets[j]);
+                                    client_sockets[j] = -1;
+                                }
                             }
                         }
                     }
