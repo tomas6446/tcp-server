@@ -21,16 +21,13 @@ int findEmptyUser(const int client_sockets[]) {
 
 int main(int argc, char *argv[]) {
     unsigned int port;
-    unsigned int addr_length;
-
-    int l_socket;
-    int client_sockets[MAX_CLIENTS];
+    int l_socket;                       // socket for connection waiting
+    int client_sockets[MAX_CLIENTS];    // client sockets
     int maxfd = 0;
-    int i;
 
     fd_set read_set;
-    struct sockaddr_in server_addr;
-    struct sockaddr_in client_addr;
+    struct sockaddr_in server_addr;     // server address structure
+    struct sockaddr_in client_addr;     // client address structure
     char buffer[BUFF_LEN];
 
     if (argc != 2) {
@@ -55,9 +52,9 @@ int main(int argc, char *argv[]) {
      * Bind the listening socket to the server address
      */
     memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    server_addr.sin_port = htons(port);
+    server_addr.sin_family = AF_INET;                           // IP protocol
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);    // IP address
+    server_addr.sin_port = htons(port);                // port
     if (bind(l_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         fprintf(stderr, "ERROR #3: bind listening socket.\n");
         exit(1);
@@ -74,7 +71,7 @@ int main(int argc, char *argv[]) {
     /*
      * Initialize client_sockets array
      */
-    for (i = 0; i < MAX_CLIENTS; i++) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
         client_sockets[i] = -1;
     }
 
@@ -86,7 +83,7 @@ int main(int argc, char *argv[]) {
         FD_ZERO(&read_set);
 
         // Add each connected client socket to the read_set and update maxfd
-        for (i = 0; i < MAX_CLIENTS; i++) {
+        for (int i = 0; i < MAX_CLIENTS; i++) {
             if (client_sockets[i] != -1) {
                 FD_SET(client_sockets[i], &read_set);
                 if (client_sockets[i] > maxfd) {
@@ -108,14 +105,14 @@ int main(int argc, char *argv[]) {
         if (FD_ISSET(l_socket, &read_set)) {
             int client_id = findEmptyUser(client_sockets);
             if (client_id != -1) {
-                addr_length = sizeof(client_addr);
+                unsigned int addr_length = sizeof(client_addr);
                 memset(&client_addr, 0, addr_length);
                 client_sockets[client_id] = accept(l_socket,
                                                    (struct sockaddr *) &client_addr, &addr_length);
                 printf("Connected:  %s\n", inet_ntoa(client_addr.sin_addr));
             }
         }
-        for (i = 0; i < MAX_CLIENTS; i++) {
+        for (int i = 0; i < MAX_CLIENTS; i++) {
             if (client_sockets[i] != -1) {
                 if (FD_ISSET(client_sockets[i], &read_set)) {
                     memset(&buffer, 0, BUFF_LEN);

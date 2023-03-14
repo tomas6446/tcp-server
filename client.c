@@ -13,6 +13,7 @@
 int main(int argc, char *argv[]) {
     unsigned int port;
     int server_socket;
+
     struct sockaddr_in server_addr;     // struct to hold server address information
     fd_set read_set;
 
