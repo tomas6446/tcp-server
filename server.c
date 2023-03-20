@@ -20,15 +20,19 @@
 
 typedef struct {
     int socket_fd;
+    int attempts;
+    int win_count;
+    int won;
     char *username;
-    int attempts
 } Client;
 
 int randomize(int lower, int upper);
 
-void guess(Client client_sockets[MAX_CLIENTS], Client *client_socket, char buffer[BUFF_LEN], int *p_answer);
+void guess(Client *p_clients, int client_index, char buffer[BUFF_LEN], int *p_answer);
 
 bool isDigit(char *buffer);
+
+void send_message(Client client_socket, const char *buffer);
 
 int findEmptyUser(Client client_sockets[]) {
     int i;
@@ -45,8 +49,15 @@ int main(int argc, char *argv[]) {
     unsigned int addr_length;
 
     Client client_sockets[MAX_CLIENTS];
-    client_sockets->username = malloc(sizeof(char) * 11);
-    client_sockets->attempts = ATTEMPTS;
+    Client *p_clients = client_sockets;
+
+
+    for(int i = 0; i < MAX_CLIENTS; i++) {
+        p_clients[i].username = malloc(sizeof(char) * 11);
+        p_clients[i].attempts = ATTEMPTS;
+        p_clients[i].won = 0;
+    }
+
 
     int l_socket;
     int maxfd = 0;
@@ -106,7 +117,7 @@ int main(int argc, char *argv[]) {
      * Initialize client_sockets array
      */
     for (i = 0; i < MAX_CLIENTS; i++) {
-        client_sockets[i].socket_fd = -1;
+        p_clients[i].socket_fd = -1;
     }
 
     /*
@@ -123,10 +134,10 @@ int main(int argc, char *argv[]) {
 
         // Add each connected client socket to the read_set and update maxfd
         for (i = 0; i < MAX_CLIENTS; i++) {
-            if (client_sockets[i].socket_fd != -1) {
-                FD_SET(client_sockets[i].socket_fd, &read_set);
-                if (client_sockets[i].socket_fd > maxfd) {
-                    maxfd = client_sockets[i].socket_fd;
+            if (p_clients[i].socket_fd != -1) {
+                FD_SET(p_clients[i].socket_fd, &read_set);
+                if (p_clients[i].socket_fd > maxfd) {
+                    maxfd = p_clients[i].socket_fd;
                 }
             }
         }
@@ -142,36 +153,36 @@ int main(int argc, char *argv[]) {
 
         // Check if a new client is connecting and accept the connection
         if (FD_ISSET(l_socket, &read_set)) {
-            int client_id = findEmptyUser(client_sockets);
+            int client_id = findEmptyUser(p_clients);
             if (client_id != -1) {
                 addr_length = sizeof(client_addr);
                 memset(&client_addr, 0, addr_length);
-                client_sockets[client_id].socket_fd = accept(l_socket,
+                p_clients[client_id].socket_fd = accept(l_socket,
                                                              (struct sockaddr *) &client_addr, &addr_length);
                 printf("Connected:  %s\n", inet_ntoa(client_addr.sin_addr));
 
-                recv(client_sockets[client_id].socket_fd, &buffer, USERNAME_LEN, 0);
+                // receive username at the start of the client program
+                recv(p_clients[client_id].socket_fd, &buffer, USERNAME_LEN, 0);
                 if (strncmp(buffer, "username:", 9) == 0) {
                     char username[11];
                     strcpy(username, buffer + 9);
-                    client_sockets[client_id].username = username;
+                    p_clients[client_id].username = username;
                 }
             }
         }
         for (i = 0; i < MAX_CLIENTS; i++) {
-            if (client_sockets[i].socket_fd != -1) {
-                if (FD_ISSET(client_sockets[i].socket_fd, &read_set)) {
+            if (p_clients[i].socket_fd != -1) {
+                if (FD_ISSET(p_clients[i].socket_fd, &read_set)) {
                     memset(&buffer, 0, BUFF_LEN);
-                    long recv_length = recv(client_sockets[i].socket_fd, &buffer, BUFF_LEN, 0);
+                    long recv_length = recv(p_clients[i].socket_fd, &buffer, BUFF_LEN, 0);
 
                     // Check if client has disconnected
                     if (recv_length <= 0 || strncmp(buffer, "\\q\n", 2) == 0) {
-                        printf("Disconnected: %s(%s) \n", client_sockets[i].username, inet_ntoa(client_addr.sin_addr));
-                        close(client_sockets[i].socket_fd); // close client socket
-                        client_sockets[i].socket_fd = -1;
+                        printf("Disconnected: %s(%s) \n", p_clients[i].username, inet_ntoa(client_addr.sin_addr));
+                        close(p_clients[i].socket_fd); // close client socket
+                        p_clients[i].socket_fd = -1;
                     } else {
-                        Client *p_client = &client_sockets[i];
-                        guess(client_sockets, p_client, buffer, p_answer);
+                        guess(p_clients, i, buffer, p_answer);
                     }
                 }
             }
@@ -181,12 +192,10 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void guess(Client client_sockets[MAX_CLIENTS], Client *client_socket, char buffer[BUFF_LEN], int *p_answer) {
-    char winner[USERNAME_LEN];
-    int won = 0;
-    long send_length;
+void guess(Client *p_clients, int client_index, char buffer[BUFF_LEN], int *p_answer) {
+    char winner[USERNAME_LEN];  // winner username
 
-    if (client_socket->attempts > 0) {
+    if (p_clients[client_index].attempts > 1 && !p_clients[client_index].won) {
         if (isDigit(buffer)) {
             int g = atoi(buffer);
             if (g < *p_answer) {
@@ -195,41 +204,44 @@ void guess(Client client_sockets[MAX_CLIENTS], Client *client_socket, char buffe
                 strcpy(buffer, "LOWER");
             } else {
                 strcpy(buffer, "WIN");
-                strcpy(winner, client_socket->username);
-                won = 1;
+                strcpy(winner, p_clients[client_index].username);
+                p_clients[client_index].won = 1;
             }
-            client_socket->attempts--;
+            p_clients[client_index].attempts--;
         } else {
             strcpy(buffer, "Not a number");
         }
 
         char attempts_left[20];
-        sprintf(attempts_left, " (%d attempts left)\n", client_socket->attempts);
+        sprintf(attempts_left, " (%d attempts left)\n", p_clients[client_index].attempts);
         strcat(buffer, attempts_left);
-    } else if (client_socket->attempts == 0) {
-        strcpy(buffer, "No attempts left");
+    } else if (p_clients[client_index].attempts == 1) {
+        strcpy(buffer, "No attempts left\n");
     }
-    send_length = send(client_socket->socket_fd, buffer, strlen(buffer), 0);
+    send_message(p_clients[client_index], buffer);
+
+//    for (int j = 0; j < MAX_CLIENTS; j++) {
+//        if (p_clients[j].socket_fd != -1) {
+//            printf("Message received from %s: %s", p_clients[j].username, buffer);
+//            if (p_clients[j].won) {
+//                sprintf(buffer, "%s won the game with win count of %d. New number generated\n",
+//                        winner,
+//                        p_clients[j].win_count);
+//                *p_answer = randomize(LOWER, UPPER); // reset number
+//                p_clients[j].attempts = ATTEMPTS; // reset attempts
+//                p_clients[j].win_count++;
+//
+//                send_message(p_clients[j], buffer);
+//            }
+//        }
+//    }
+}
+
+void send_message(Client client_socket, const char *buffer) {
+    long send_length = send(client_socket.socket_fd, buffer, strlen(buffer), 0);
     if (send_length <= 0) {
-        close(client_socket->socket_fd);
-        client_socket->socket_fd = -1;
-    }
-
-    for (int j = 0; j < MAX_CLIENTS; j++) {
-        if (client_sockets[j].socket_fd != -1) {
-            printf("Message received from %s: %s", client_sockets[j].username, buffer);
-            if (won) {
-                sprintf(buffer, "%s won the game. New number generated\n", winner);
-                *p_answer = randomize(LOWER, UPPER); // reset number
-
-                send_length = send(client_sockets[j].socket_fd, buffer, strlen(buffer), 0);
-                client_sockets[j].attempts = ATTEMPTS; // reset attempts
-                if (send_length <= 0) {
-                    close(client_socket->socket_fd);
-                    client_socket->socket_fd = -1;
-                }
-            }
-        }
+        close(client_socket.socket_fd);
+        client_socket.socket_fd = -1;
     }
 }
 
