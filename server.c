@@ -52,10 +52,11 @@ int main(int argc, char *argv[]) {
     Client *p_clients = client_sockets;
 
 
-    for(int i = 0; i < MAX_CLIENTS; i++) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
         p_clients[i].username = malloc(sizeof(char) * 11);
         p_clients[i].attempts = ATTEMPTS;
         p_clients[i].won = 0;
+        p_clients[i].win_count = 0;
     }
 
 
@@ -126,7 +127,7 @@ int main(int argc, char *argv[]) {
     srand(time(0));
     int answer = randomize(LOWER, UPPER);
     int *p_answer = &answer;
-    printf("The answer is %d", answer);
+    printf("The answer is %d\n", answer);
 
     while (1) {
         // clear the read_set
@@ -158,7 +159,7 @@ int main(int argc, char *argv[]) {
                 addr_length = sizeof(client_addr);
                 memset(&client_addr, 0, addr_length);
                 p_clients[client_id].socket_fd = accept(l_socket,
-                                                             (struct sockaddr *) &client_addr, &addr_length);
+                                                        (struct sockaddr *) &client_addr, &addr_length);
                 printf("Connected:  %s\n", inet_ntoa(client_addr.sin_addr));
 
                 // receive username at the start of the client program
@@ -193,7 +194,7 @@ int main(int argc, char *argv[]) {
 }
 
 void guess(Client *p_clients, int client_index, char buffer[BUFF_LEN], int *p_answer) {
-    char winner[USERNAME_LEN];  // winner username
+    int win_exists = 0;
 
     if (p_clients[client_index].attempts > 1 && !p_clients[client_index].won) {
         if (isDigit(buffer)) {
@@ -204,8 +205,8 @@ void guess(Client *p_clients, int client_index, char buffer[BUFF_LEN], int *p_an
                 strcpy(buffer, "LOWER");
             } else {
                 strcpy(buffer, "WIN");
-                strcpy(winner, p_clients[client_index].username);
                 p_clients[client_index].won = 1;
+                win_exists = 1;
             }
             p_clients[client_index].attempts--;
         } else {
@@ -220,21 +221,26 @@ void guess(Client *p_clients, int client_index, char buffer[BUFF_LEN], int *p_an
     }
     send_message(p_clients[client_index], buffer);
 
-//    for (int j = 0; j < MAX_CLIENTS; j++) {
-//        if (p_clients[j].socket_fd != -1) {
-//            printf("Message received from %s: %s", p_clients[j].username, buffer);
-//            if (p_clients[j].won) {
-//                sprintf(buffer, "%s won the game with win count of %d. New number generated\n",
-//                        winner,
-//                        p_clients[j].win_count);
-//                *p_answer = randomize(LOWER, UPPER); // reset number
-//                p_clients[j].attempts = ATTEMPTS; // reset attempts
-//                p_clients[j].win_count++;
-//
-//                send_message(p_clients[j], buffer);
-//            }
-//        }
-//    }
+    for (int j = 0; j < MAX_CLIENTS; j++) {
+        if (p_clients[j].socket_fd != -1) {
+            printf("Message received from %s: %s", p_clients[j].username, buffer);
+            if (win_exists) {
+                if (p_clients[j].won) {
+                    p_clients[j].win_count++;
+                    p_clients[j].won = 0;
+                }
+                p_clients[j].attempts = ATTEMPTS; // reset attempts
+                *p_answer = randomize(LOWER, UPPER); // reset number
+
+                sprintf(buffer, "%s won the game with win count of %d. New number generated\n",
+                        p_clients[j].username,
+                        p_clients[j].win_count);
+                printf("The answer is %d\n", *p_answer);
+                send_message(p_clients[j], buffer);
+            }
+
+        }
+    }
 }
 
 void send_message(Client client_socket, const char *buffer) {
