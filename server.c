@@ -34,6 +34,8 @@ bool isDigit(char *buffer);
 
 void send_message(Client client_socket, const char *buffer);
 
+void message_all(Client *clients, char buffer[1024]);
+
 int findEmptyUser(Client client_sockets[]) {
     int i;
     for (i = 0; i < MAX_CLIENTS; i++) {
@@ -182,6 +184,8 @@ int main(int argc, char *argv[]) {
                         printf("Disconnected: %s(%s) \n", p_clients[i].username, inet_ntoa(client_addr.sin_addr));
                         close(p_clients[i].socket_fd); // close client socket
                         p_clients[i].socket_fd = -1;
+                    } else if (strncmp(buffer, "\\m\n", 2) == 0) {
+                        message_all(p_clients, buffer);
                     } else {
                         guess(p_clients, i, buffer, p_answer);
                     }
@@ -191,6 +195,12 @@ int main(int argc, char *argv[]) {
     }
 
     return 0;
+}
+
+void message_all(Client *clients, char buffer[BUFF_LEN]) {
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        send_message(clients[i], buffer + 2);
+    }
 }
 
 void guess(Client *p_clients, int client_index, char buffer[BUFF_LEN], int *p_answer) {
