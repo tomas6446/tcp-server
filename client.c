@@ -102,7 +102,8 @@ int main(int argc, char *argv[]) {
 
             printf("%s", recv_buff);
         } else if (FD_ISSET(0, &read_set)) {
-            read(0, &send_buff, sizeof(send_buff));     // read the input message from standard input
+            fgets(send_buff, BUFF_LEN, stdin);
+
             write(server_socket, send_buff, sizeof(send_buff));
         }
     }

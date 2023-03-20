@@ -6,20 +6,26 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <slcurses.h>
+#include <ctype.h>
 
 #define BUFF_LEN 1024
 #define USERNAME_LEN 20
 #define MAX_CLIENTS 10
+// RANDOMIZE
+#define UPPER 100
+#define LOWER 0
 
 typedef struct {
     int socket_fd;
     char *username;
-    int last_guess
 } Client;
 
 int randomize(int lower, int upper);
 
-void guess(Client client_socket, char buffer[1024]);
+void guess(Client client_sockets[MAX_CLIENTS], Client client_socket, char buffer[BUFF_LEN], int *p_answer);
+
+bool isDigit(char *buffer);
 
 int findEmptyUser(Client client_sockets[]) {
     int i;
@@ -36,6 +42,7 @@ int main(int argc, char *argv[]) {
     unsigned int addr_length;
 
     Client client_sockets[MAX_CLIENTS];
+    client_sockets->username = malloc(sizeof(char) * 11);
 
     int l_socket;
     int maxfd = 0;
@@ -71,6 +78,13 @@ int main(int argc, char *argv[]) {
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(port);
+
+    int yes = 1;
+    if (setsockopt(l_socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+        fprintf(stderr, "ERROR #3: bind listening socket.\n");
+        exit(1);
+    }
+
     if (bind(l_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         fprintf(stderr, "ERROR #3: bind listening socket.\n");
         exit(1);
@@ -94,10 +108,10 @@ int main(int argc, char *argv[]) {
     /*
      * Main loop to accept incoming connections and read messages from clients
      */
-
-
     srand(time(0));
-    int answer = randomize(0, 80);
+    int answer = randomize(LOWER, UPPER);
+    int *p_answer = &answer;
+    printf("The answer is %d", answer);
 
     while (1) {
         // clear the read_set
@@ -132,9 +146,11 @@ int main(int argc, char *argv[]) {
                                                              (struct sockaddr *) &client_addr, &addr_length);
                 printf("Connected:  %s\n", inet_ntoa(client_addr.sin_addr));
 
-                recv(client_sockets[client_id].socket_fd, &buffer, BUFF_LEN, 0);
+                recv(client_sockets[client_id].socket_fd, &buffer, USERNAME_LEN, 0);
                 if (strncmp(buffer, "username:", 9) == 0) {
-                    client_sockets[client_id].username = buffer + 9;
+                    char username[11];
+                    strcpy(username, buffer + 9);
+                    client_sockets[client_id].username = username;
                 }
             }
         }
@@ -150,13 +166,7 @@ int main(int argc, char *argv[]) {
                         close(client_sockets[i].socket_fd); // close client socket
                         client_sockets[i].socket_fd = -1;
                     } else {
-                        int j;
-                        for (j = 0; j < MAX_CLIENTS; j++) {
-                            if (client_sockets[j].socket_fd != -1) {
-                                printf("Message received from %s: %s\n", client_sockets[j].username, buffer);
-                                guess(client_sockets[j], buffer);
-                            }
-                        }
+                        guess(client_sockets, client_sockets[i], buffer, p_answer);
                     }
                 }
             }
@@ -166,13 +176,55 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void guess(Client client_socket, char buffer[1024]) {
-    // TODO: ANSWER
-//    long send_length = send(client_socket.socket_fd, buffer, sizeof(buffer), 0);
-//    if (send_length <= 0) {
-//        close(client_socket.socket_fd);
-//        client_socket.socket_fd = -1;
-//    }
+void guess(Client client_sockets[MAX_CLIENTS], Client client_socket, char buffer[BUFF_LEN], int *p_answer) {
+    char winner[USERNAME_LEN];
+    int won = 0;
+    if (isDigit(buffer)) {
+        int g = atoi(buffer);
+        if (g < *p_answer) {
+            strcpy(buffer, "HIGHER\n");
+        } else if (g > *p_answer) {
+            strcpy(buffer, "LOWER\n");
+        } else {
+            strcpy(buffer, "WIN\n");
+            strcpy(winner, client_socket.username);
+            won = 1;
+        }
+    } else {
+        strcpy(buffer, "Not a number\n");
+    }
+
+    long send_length = send(client_socket.socket_fd, buffer, strlen(buffer), 0);
+    if (send_length <= 0) {
+        close(client_socket.socket_fd);
+        client_socket.socket_fd = -1;
+    }
+
+    for (int j = 0; j < MAX_CLIENTS; j++) {
+        if (client_sockets[j].socket_fd != -1) {
+            printf("Message received from %s: %s", client_sockets[j].username, buffer);
+            if (won) {
+                sprintf(buffer, "%s won the game. New number generated\n", winner);
+                *p_answer = randomize(LOWER, UPPER);
+
+                send_length = send(client_sockets[j].socket_fd, buffer, strlen(buffer), 0);
+                if (send_length <= 0) {
+                    close(client_socket.socket_fd);
+                    client_socket.socket_fd = -1;
+                }
+            }
+        }
+    }
+}
+
+bool isDigit(char *buffer) {
+    buffer[strlen(buffer) - 1] = '\0';
+    for (int i = 0; i < strlen(buffer); i++) {
+        if (!isdigit(buffer[i])) {
+            return 0;
+        }
+    }
+    return 1;
 }
 
 int randomize(int lower, int upper) {
