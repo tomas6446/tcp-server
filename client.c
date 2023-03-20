@@ -64,6 +64,7 @@ int main(int argc, char *argv[]) {
     char username[BUFF_LEN];
     char recv_buff[BUFF_LEN];
     char send_buff[BUFF_LEN];
+
     printf("Guess the Number\".\n"
            "The server chooses a random number between 1 and 100.\n"
            "The client connects to the server and is prompted to guess the number.\n"
@@ -94,7 +95,6 @@ int main(int argc, char *argv[]) {
 
         // Monitor read_set for any incoming data
         select(server_socket + 1, &read_set, NULL, NULL, NULL);
-
         // Check if the incoming data is from the server_socket
         if (FD_ISSET(server_socket, &read_set)) {
             memset(&recv_buff, 0, BUFF_LEN);                   // clear the reception buffer
@@ -103,7 +103,6 @@ int main(int argc, char *argv[]) {
             printf("%s", recv_buff);
         } else if (FD_ISSET(0, &read_set)) {
             fgets(send_buff, BUFF_LEN, stdin);
-
             write(server_socket, send_buff, sizeof(send_buff));
         }
     }

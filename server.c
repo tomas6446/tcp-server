@@ -12,18 +12,21 @@
 #define BUFF_LEN 1024
 #define USERNAME_LEN 20
 #define MAX_CLIENTS 10
-// RANDOMIZE
+
+// GAME PARAM
 #define UPPER 100
 #define LOWER 0
+#define ATTEMPTS 10
 
 typedef struct {
     int socket_fd;
     char *username;
+    int attempts
 } Client;
 
 int randomize(int lower, int upper);
 
-void guess(Client client_sockets[MAX_CLIENTS], Client client_socket, char buffer[BUFF_LEN], int *p_answer);
+void guess(Client client_sockets[MAX_CLIENTS], Client *client_socket, char buffer[BUFF_LEN], int *p_answer);
 
 bool isDigit(char *buffer);
 
@@ -43,6 +46,7 @@ int main(int argc, char *argv[]) {
 
     Client client_sockets[MAX_CLIENTS];
     client_sockets->username = malloc(sizeof(char) * 11);
+    client_sockets->attempts = ATTEMPTS;
 
     int l_socket;
     int maxfd = 0;
@@ -166,7 +170,8 @@ int main(int argc, char *argv[]) {
                         close(client_sockets[i].socket_fd); // close client socket
                         client_sockets[i].socket_fd = -1;
                     } else {
-                        guess(client_sockets, client_sockets[i], buffer, p_answer);
+                        Client *p_client = &client_sockets[i];
+                        guess(client_sockets, p_client, buffer, p_answer);
                     }
                 }
             }
@@ -176,28 +181,38 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void guess(Client client_sockets[MAX_CLIENTS], Client client_socket, char buffer[BUFF_LEN], int *p_answer) {
+void guess(Client client_sockets[MAX_CLIENTS], Client *client_socket, char buffer[BUFF_LEN], int *p_answer) {
     char winner[USERNAME_LEN];
     int won = 0;
-    if (isDigit(buffer)) {
-        int g = atoi(buffer);
-        if (g < *p_answer) {
-            strcpy(buffer, "HIGHER\n");
-        } else if (g > *p_answer) {
-            strcpy(buffer, "LOWER\n");
-        } else {
-            strcpy(buffer, "WIN\n");
-            strcpy(winner, client_socket.username);
-            won = 1;
-        }
-    } else {
-        strcpy(buffer, "Not a number\n");
-    }
+    long send_length;
 
-    long send_length = send(client_socket.socket_fd, buffer, strlen(buffer), 0);
+    if (client_socket->attempts > 0) {
+        if (isDigit(buffer)) {
+            int g = atoi(buffer);
+            if (g < *p_answer) {
+                strcpy(buffer, "HIGHER");
+            } else if (g > *p_answer) {
+                strcpy(buffer, "LOWER");
+            } else {
+                strcpy(buffer, "WIN");
+                strcpy(winner, client_socket->username);
+                won = 1;
+            }
+            client_socket->attempts--;
+        } else {
+            strcpy(buffer, "Not a number");
+        }
+
+        char attempts_left[20];
+        sprintf(attempts_left, " (%d attempts left)\n", client_socket->attempts);
+        strcat(buffer, attempts_left);
+    } else if (client_socket->attempts == 0) {
+        strcpy(buffer, "No attempts left");
+    }
+    send_length = send(client_socket->socket_fd, buffer, strlen(buffer), 0);
     if (send_length <= 0) {
-        close(client_socket.socket_fd);
-        client_socket.socket_fd = -1;
+        close(client_socket->socket_fd);
+        client_socket->socket_fd = -1;
     }
 
     for (int j = 0; j < MAX_CLIENTS; j++) {
@@ -205,12 +220,13 @@ void guess(Client client_sockets[MAX_CLIENTS], Client client_socket, char buffer
             printf("Message received from %s: %s", client_sockets[j].username, buffer);
             if (won) {
                 sprintf(buffer, "%s won the game. New number generated\n", winner);
-                *p_answer = randomize(LOWER, UPPER);
+                *p_answer = randomize(LOWER, UPPER); // reset number
 
                 send_length = send(client_sockets[j].socket_fd, buffer, strlen(buffer), 0);
+                client_sockets[j].attempts = ATTEMPTS; // reset attempts
                 if (send_length <= 0) {
-                    close(client_socket.socket_fd);
-                    client_socket.socket_fd = -1;
+                    close(client_socket->socket_fd);
+                    client_socket->socket_fd = -1;
                 }
             }
         }
