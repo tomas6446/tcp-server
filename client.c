@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #define BUFF_LEN 1024
+#define USERNAME_LEN 20
 
 int main(int argc, char *argv[]) {
     unsigned int port;
@@ -16,9 +17,6 @@ int main(int argc, char *argv[]) {
 
     struct sockaddr_in server_addr;     // struct to hold server address information
     fd_set read_set;
-
-    char recv_buff[BUFF_LEN];
-    char send_buff[BUFF_LEN];
 
     if (argc != 3) {
         fprintf(stderr, "USAGE: %s <ip> <port>\n", argv[0]);
@@ -63,16 +61,28 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-
     char username[BUFF_LEN];
-    printf("OPTIONS:\n"
-           "/q - to quit\n");
+    char recv_buff[BUFF_LEN];
+    char send_buff[BUFF_LEN];
+    printf("Guess the Number\".\n"
+           "The server chooses a random number between 1 and 100.\n"
+           "The client connects to the server and is prompted to guess the number.\n"
+           "The client has 10 attempts to guess the number.\n"
+           "After each guess, the server responds with either \"Higher\", \"Lower\", or \"Correct!\".\n"
+           "If the client guesses the number correctly, they win the game."
+           "OPTIONS:\n"
+           "/q - to quit\n"
+           "/m - to message all clients\n\n");
     printf("Username: ");
     fgets(username, BUFF_LEN, stdin);
     int len = strlen(username);
     if (len > 0 && username[len - 1] == '\n') {
         username[len - 1] = '\0';
     }
+
+    char username_message[USERNAME_LEN];
+    sprintf(username_message, "username:%s", username);
+    write(server_socket, username_message, sizeof(username_message));
 
     memset(&send_buff, 0, BUFF_LEN);                                // clear memory for send buffer
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);  // make standard input non-blocking
@@ -93,21 +103,7 @@ int main(int argc, char *argv[]) {
             printf("%s", recv_buff);
         } else if (FD_ISSET(0, &read_set)) {
             read(0, &send_buff, sizeof(send_buff));     // read the input message from standard input
-            if (strncmp(send_buff, "/q\n", 2) == 0) {
-                printf("Quitting...");
-
-                char disconnect_message[BUFF_LEN];
-                sprintf(disconnect_message, "%s %s\n", username, "has been disconnected.");
-                write(server_socket, disconnect_message, sizeof(disconnect_message));
-
-                // close the server socket and exit the program
-                close(server_socket);
-                exit(0);
-            } else {
-                char message[BUFF_LEN];
-                sprintf(message, "%s: %s", username, send_buff);    // format message with username
-                write(server_socket, message, sizeof(message));
-            }
+            write(server_socket, send_buff, sizeof(send_buff));
         }
     }
 

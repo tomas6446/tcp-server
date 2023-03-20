@@ -5,14 +5,26 @@
 #include <sys/select.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 #define BUFF_LEN 1024
+#define USERNAME_LEN 20
 #define MAX_CLIENTS 10
 
-int findEmptyUser(const int client_sockets[]) {
+typedef struct {
+    int socket_fd;
+    char *username;
+    int last_guess
+} Client;
+
+int randomize(int lower, int upper);
+
+void guess(Client client_socket, char buffer[1024]);
+
+int findEmptyUser(Client client_sockets[]) {
     int i;
     for (i = 0; i < MAX_CLIENTS; i++) {
-        if (client_sockets[i] == -1) {
+        if (client_sockets[i].socket_fd == -1) {
             return i;
         }
     }
@@ -21,13 +33,17 @@ int findEmptyUser(const int client_sockets[]) {
 
 int main(int argc, char *argv[]) {
     unsigned int port;
-    int l_socket;                       // socket for connection waiting
-    int client_sockets[MAX_CLIENTS];    // client sockets
+    unsigned int addr_length;
+
+    Client client_sockets[MAX_CLIENTS];
+
+    int l_socket;
     int maxfd = 0;
+    int i;
 
     fd_set read_set;
-    struct sockaddr_in server_addr;     // server address structure
-    struct sockaddr_in client_addr;     // client address structure
+    struct sockaddr_in server_addr;
+    struct sockaddr_in client_addr;
     char buffer[BUFF_LEN];
 
     if (argc != 2) {
@@ -52,9 +68,9 @@ int main(int argc, char *argv[]) {
      * Bind the listening socket to the server address
      */
     memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;                           // IP protocol
-    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);    // IP address
-    server_addr.sin_port = htons(port);                // port
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(port);
     if (bind(l_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         fprintf(stderr, "ERROR #3: bind listening socket.\n");
         exit(1);
@@ -71,23 +87,28 @@ int main(int argc, char *argv[]) {
     /*
      * Initialize client_sockets array
      */
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        client_sockets[i] = -1;
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        client_sockets[i].socket_fd = -1;
     }
 
     /*
      * Main loop to accept incoming connections and read messages from clients
      */
+
+
+    srand(time(0));
+    int answer = randomize(0, 80);
+
     while (1) {
         // clear the read_set
         FD_ZERO(&read_set);
 
         // Add each connected client socket to the read_set and update maxfd
-        for (int i = 0; i < MAX_CLIENTS; i++) {
-            if (client_sockets[i] != -1) {
-                FD_SET(client_sockets[i], &read_set);
-                if (client_sockets[i] > maxfd) {
-                    maxfd = client_sockets[i];
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (client_sockets[i].socket_fd != -1) {
+                FD_SET(client_sockets[i].socket_fd, &read_set);
+                if (client_sockets[i].socket_fd > maxfd) {
+                    maxfd = client_sockets[i].socket_fd;
                 }
             }
         }
@@ -105,34 +126,35 @@ int main(int argc, char *argv[]) {
         if (FD_ISSET(l_socket, &read_set)) {
             int client_id = findEmptyUser(client_sockets);
             if (client_id != -1) {
-                unsigned int addr_length = sizeof(client_addr);
+                addr_length = sizeof(client_addr);
                 memset(&client_addr, 0, addr_length);
-                client_sockets[client_id] = accept(l_socket,
-                                                   (struct sockaddr *) &client_addr, &addr_length);
+                client_sockets[client_id].socket_fd = accept(l_socket,
+                                                             (struct sockaddr *) &client_addr, &addr_length);
                 printf("Connected:  %s\n", inet_ntoa(client_addr.sin_addr));
+
+                recv(client_sockets[client_id].socket_fd, &buffer, BUFF_LEN, 0);
+                if (strncmp(buffer, "username:", 9) == 0) {
+                    client_sockets[client_id].username = buffer + 9;
+                }
             }
         }
-        for (int i = 0; i < MAX_CLIENTS; i++) {
-            if (client_sockets[i] != -1) {
-                if (FD_ISSET(client_sockets[i], &read_set)) {
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (client_sockets[i].socket_fd != -1) {
+                if (FD_ISSET(client_sockets[i].socket_fd, &read_set)) {
                     memset(&buffer, 0, BUFF_LEN);
-                    long recv_length = recv(client_sockets[i], &buffer, BUFF_LEN, 0);
+                    long recv_length = recv(client_sockets[i].socket_fd, &buffer, BUFF_LEN, 0);
 
                     // Check if client has disconnected
-                    if (recv_length <= 0) {
-                        printf("Disconnected: %s\n", inet_ntoa(client_addr.sin_addr));
-                        close(client_sockets[i]); // close client socket
-                        client_sockets[i] = -1;
+                    if (recv_length <= 0 || strncmp(buffer, "\\q\n", 2) == 0) {
+                        printf("Disconnected: %s(%s) \n", client_sockets[i].username, inet_ntoa(client_addr.sin_addr));
+                        close(client_sockets[i].socket_fd); // close client socket
+                        client_sockets[i].socket_fd = -1;
                     } else {
                         int j;
                         for (j = 0; j < MAX_CLIENTS; j++) {
-                            if (client_sockets[j] != -1) {
-                                printf("Message received from %s: %s\n", inet_ntoa(client_addr.sin_addr), buffer);
-                                long send_length = send(client_sockets[j], buffer, recv_length, 0);
-                                if (send_length <= 0) {
-                                    close(client_sockets[j]);
-                                    client_sockets[j] = -1;
-                                }
+                            if (client_sockets[j].socket_fd != -1) {
+                                printf("Message received from %s: %s\n", client_sockets[j].username, buffer);
+                                guess(client_sockets[j], buffer);
                             }
                         }
                     }
@@ -142,4 +164,17 @@ int main(int argc, char *argv[]) {
     }
 
     return 0;
+}
+
+void guess(Client client_socket, char buffer[1024]) {
+    // TODO: ANSWER
+//    long send_length = send(client_socket.socket_fd, buffer, sizeof(buffer), 0);
+//    if (send_length <= 0) {
+//        close(client_socket.socket_fd);
+//        client_socket.socket_fd = -1;
+//    }
+}
+
+int randomize(int lower, int upper) {
+    return (rand() % (upper - lower + 1)) + lower;
 }
