@@ -15,7 +15,7 @@
 
 // GAME PARAM
 #define UPPER 100
-#define LOWER 0
+#define LOWER 1
 #define ATTEMPTS 10
 
 typedef struct {

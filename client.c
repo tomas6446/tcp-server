@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
 
     do {
         printf("Username (3-11 char length): ");
-        fgets(username, BUFF_LEN, stdin);
+        fgets(username, USERNAME_LEN, stdin);
         username[strlen(username) - 1] = '\0';
     } while (!valid(username));
 
