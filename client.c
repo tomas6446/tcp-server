@@ -6,10 +6,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <regex.h>
 #include <unistd.h>
+#include <slcurses.h>
 
 #define BUFF_LEN 1024
 #define USERNAME_LEN 20
+
+bool valid(char username[20]);
 
 int main(int argc, char *argv[]) {
     unsigned int port;
@@ -61,7 +65,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    char username[BUFF_LEN];
+    char username[USERNAME_LEN];
     char recv_buff[BUFF_LEN];
     char send_buff[BUFF_LEN];
 
@@ -74,12 +78,13 @@ int main(int argc, char *argv[]) {
            "OPTIONS:\n"
            "/q - to quit\n"
            "/m - to message all clients\n\n");
-    printf("Username: ");
-    fgets(username, BUFF_LEN, stdin);
-    int len = strlen(username);
-    if (len > 0 && username[len - 1] == '\n') {
-        username[len - 1] = '\0';
-    }
+
+    do {
+        printf("Username (3-11 char length): ");
+        fgets(username, BUFF_LEN, stdin);
+        username[strlen(username) - 1] = '\0';
+    } while (!valid(username));
+
 
     char username_message[USERNAME_LEN];
     sprintf(username_message, "username:%s", username);
@@ -109,4 +114,20 @@ int main(int argc, char *argv[]) {
 
     close(server_socket);
     return 0;
+}
+
+bool valid(char username[USERNAME_LEN]) {
+    regex_t regex;
+    if (regcomp(&regex, "^[A-Za-z0-9_]{3,11}$", REG_EXTENDED) == 0) {
+        if (regexec(&regex, username, 0, NULL, 0) != 0) {
+            printf("Invalid username\n");
+            return 0;
+        }
+
+        regfree(&regex);
+        return 1;
+    } else {
+        fprintf(stderr, "Could not compile regex\n");
+        exit(EXIT_FAILURE);
+    }
 }
