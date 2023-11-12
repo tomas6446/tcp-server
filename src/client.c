@@ -1,8 +1,6 @@
 
 #include <fcntl.h>
-#include <sys/socket.h>
 #include <sys/select.h>
-#include <arpa/inet.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,60 +8,15 @@
 #include <unistd.h>
 #include <slcurses.h>
 
+#include "../headers/connection.h"
+
 #define BUFF_LEN 1024
 #define USERNAME_LEN 20
 
-bool valid(char username[20]);
+bool validateUsername(char username[20]);
 
 int main(int argc, char *argv[]) {
-    unsigned int port;
-    int server_socket;
-
-    struct sockaddr_in server_addr;     // struct to hold server address information
-    fd_set read_set;
-
-    if (argc != 3) {
-        fprintf(stderr, "USAGE: %s <ip> <port>\n", argv[0]);
-        exit(1);
-    }
-    port = atoi(argv[2]);
-    if ((port < 1) || (port > 65535)) {
-        printf("ERROR #1: invalid port specified.\n");
-        exit(1);
-    }
-
-    /*
-     * Create server socket
-     */
-    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        fprintf(stderr, "ERROR #2: cannot create socket.\n");
-        exit(1);
-    }
-
-    /*
-     * Clear memory for server struct
-     * and specify address family and port number
-     */
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-
-    /*
-     * Convert IP address from string to binary form
-     * and store in server_addr.sin_addr
-     */
-    if (inet_aton(argv[1], &server_addr.sin_addr) <= 0) {
-        fprintf(stderr, "ERROR #3: Invalid remote IP address.\n");
-        exit(1);
-    }
-
-    /*
-     * Connect to server
-     */
-    if (connect(server_socket, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
-        fprintf(stderr, "ERROR #4: error in connect().\n");
-        exit(1);
-    }
+    Connection connection = createClientConnection(argc, argv);
 
     char username[USERNAME_LEN];
     char recv_buff[BUFF_LEN];
@@ -83,40 +36,40 @@ int main(int argc, char *argv[]) {
         printf("Username (3-11 char length): ");
         fgets(username, USERNAME_LEN, stdin);
         username[strlen(username) - 1] = '\0';
-    } while (!valid(username));
+    } while (!validateUsername(username));
 
 
     char username_message[USERNAME_LEN];
     sprintf(username_message, "username:%s", username);
-    write(server_socket, username_message, sizeof(username_message));
+    write(connection.server_socket, username_message, sizeof(username_message));
 
     memset(&send_buff, 0, BUFF_LEN);                                // clear memory for send buffer
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);  // make standard input non-blocking
     while (1) {
         // Create and initialize the read_set with server_socket and standard input
-        FD_ZERO(&read_set);
-        FD_SET(server_socket, &read_set);
-        FD_SET(0, &read_set);   // 0 is the file descriptor for standard input
+        FD_ZERO(&connection.read_set);
+        FD_SET(connection.server_socket, &connection.read_set);
+        FD_SET(0, &connection.read_set);   // 0 is the file descriptor for standard input
 
         // Monitor read_set for any incoming data
-        select(server_socket + 1, &read_set, NULL, NULL, NULL);
+        select(connection.server_socket + 1, &connection.read_set, NULL, NULL, NULL);
         // Check if the incoming data is from the server_socket
-        if (FD_ISSET(server_socket, &read_set)) {
+        if (FD_ISSET(connection.server_socket, &connection.read_set)) {
             memset(&recv_buff, 0, BUFF_LEN);                   // clear the reception buffer
-            read(server_socket, &recv_buff, BUFF_LEN);  // read the incoming message from server_socket
+            read(connection.server_socket, &recv_buff, BUFF_LEN);  // read the incoming message from server_socket
 
             printf("%s", recv_buff);
-        } else if (FD_ISSET(0, &read_set)) {
+        } else if (FD_ISSET(0, &connection.read_set)) {
             fgets(send_buff, BUFF_LEN, stdin);
-            write(server_socket, send_buff, sizeof(send_buff));
+            write(connection.server_socket, send_buff, sizeof(send_buff));
         }
     }
 
-    close(server_socket);
+    close(connection.server_socket);
     return 0;
 }
 
-bool valid(char username[USERNAME_LEN]) {
+bool validateUsername(char username[USERNAME_LEN]) {
     regex_t regex;
     if (regcomp(&regex, "^[A-Za-z0-9_]{3,11}$", REG_EXTENDED) == 0) {
         if (regexec(&regex, username, 0, NULL, 0) != 0) {
