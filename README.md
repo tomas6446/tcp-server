@@ -8,14 +8,12 @@ If the client guesses the number correctly, they win the game.
 
 ## Usage
 To compile the program:
+```bash
+gcc -o server src/server.c src/game.c src/connection.c src/client_management.c -lpthread
+gcc -o client src/client.c src/connection.c -lpthread
+ ```
+To run the program:
 ``` bash
-# Create a build directory
-mkdir build
-# Navigate to the build directory
-cd build
-# Run cmake and make
-cmake ..
-make
 # Run the server
 ./server <server-port>
 # Run the client
