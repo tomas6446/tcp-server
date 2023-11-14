@@ -23,6 +23,6 @@ void createClientAddressFamily(Connection *connection);
 
 void createServerAddressFamily(Connection *connection);
 
-Connection createClientConnection(char *const *argv);
+Connection* createClientConnection(char *const *argv);
 
-Connection createServerConnection(char *const *argv);
+Connection* createServerConnection(char *const *argv);

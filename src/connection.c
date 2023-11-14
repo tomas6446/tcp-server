@@ -29,18 +29,18 @@ void createServerAddressFamily(Connection *connection) {
 }
 
 
-Connection createClientConnection(char *const *argv) {
+Connection* createClientConnection(char *const *argv) {
     unsigned int port = atoi(argv[2]);
-    Connection connection;
-    connection.port = validatePort(port);
-    connection.socket = createSocket();
-    createClientAddressFamily(&connection);
+    Connection* connection = malloc(sizeof(Connection));
+    connection->port = validatePort(port);
+    connection->socket = createSocket();
+    createClientAddressFamily(connection);
 
     /*
      * Convert IP address from string to binary form
      * and store in addr.sin_addr
      */
-    if (inet_aton(argv[1], &connection.addr.sin_addr) <= 0) {
+    if (inet_aton(argv[1], &connection->addr.sin_addr) <= 0) {
         fprintf(stderr, "ERROR #3: Invalid remote IP address.\n");
         exit(1);
     }
@@ -48,7 +48,7 @@ Connection createClientConnection(char *const *argv) {
     /*
      * Connect to server
      */
-    if (connect(connection.socket, (struct sockaddr *) &connection.addr, sizeof(connection.addr)) < 0) {
+    if (connect(connection->socket, (struct sockaddr *) &connection->addr, sizeof(connection->addr)) < 0) {
         fprintf(stderr, "ERROR #4: error in connect().\n");
         exit(1);
     }
@@ -56,20 +56,20 @@ Connection createClientConnection(char *const *argv) {
     return connection;
 }
 
-Connection createServerConnection(char *const *argv) {
+Connection* createServerConnection(char *const *argv) {
     unsigned int port = atoi(argv[1]);
-    Connection connection;
-    connection.port = validatePort(port);
-    connection.socket = createSocket();
-    createServerAddressFamily(&connection);
+    Connection* connection = malloc(sizeof(Connection));
+    connection->port = validatePort(port);
+    connection->socket = createSocket();
+    createServerAddressFamily(connection);
 
     int yes = 1;
-    if (setsockopt(connection.socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+    if (setsockopt(connection->socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
         fprintf(stderr, "ERROR #3: bind listening socket.\n");
         exit(1);
     }
 
-    if (bind(connection.socket, (struct sockaddr *) &connection.addr, sizeof(connection.addr)) < 0) {
+    if (bind(connection->socket, (struct sockaddr *) &connection->addr, sizeof(connection->addr)) < 0) {
         fprintf(stderr, "ERROR #3: bind listening socket.\n");
         exit(1);
     }
@@ -77,7 +77,7 @@ Connection createServerConnection(char *const *argv) {
     /*
      * Start listening for incoming connections
      */
-    if (listen(connection.socket, 5) < 0) {
+    if (listen(connection->socket, 5) < 0) {
         fprintf(stderr, "ERROR #4: error in listen().\n");
         exit(1);
     }

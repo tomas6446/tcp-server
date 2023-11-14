@@ -49,6 +49,7 @@ void handleGuess(Client *clients, int client_index, char buffer[BUFF_LEN], long 
         char attempts_left[20];
         sprintf(attempts_left, " (%d attempts left)\n", clients[client_index].attempts);
         strcat(buffer, attempts_left);
+        printf("Message received from %s: %s", clients[client_index].username, buffer);
     } else if (clients[client_index].attempts == 1) {
         strcpy(buffer, "No attempts left\n");
     }
@@ -56,7 +57,6 @@ void handleGuess(Client *clients, int client_index, char buffer[BUFF_LEN], long 
 
     for (int j = 0; j < MAX_CLIENTS; j++) {
         if (clients[j].socket_fd != -1) {
-            printf("Message received from %s: %s", clients[j].username, buffer);
             if (win_exists) {
                 resetGame(answer, &clients[j], buffer);
             }
@@ -72,7 +72,7 @@ void resetGame(long *answer, Client *client, char buffer[BUFF_LEN]) {
     client->attempts = ATTEMPTS; // reset attempts
     *answer = randomize(LOWER, UPPER); // reset number
 
-    sprintf(buffer, "%s won the game with win count of %d. New number generated\n",
+    sprintf(buffer, "%s won the game with win count of %d. New number generated.\n",
             client->username,
             client->win_count);
     printf("The answer is %ld\n", *answer);

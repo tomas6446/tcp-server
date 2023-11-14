@@ -16,23 +16,18 @@
 bool validateUsername(char username[20]);
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        fprintf(stderr, "USAGE: %s <ip> <port>\n", argv[0]);
-        exit(1);
-    }
-
-    Connection clientConnection = createClientConnection(argv);
+    Connection *connection = createClientConnection(argv);
 
     char username[USERNAME_LEN];
     char recv_buff[BUFF_LEN];
     char send_buff[BUFF_LEN];
 
-    printf("Guess the Number\".\n"
+    printf("Guess the Number.\n"
            "The server chooses a random number between 1 and 100.\n"
-           "The client connects to the server and is prompted to handle_guess the number.\n"
-           "The client has 10 attempts to handle_guess the number.\n"
-           "After each handle_guess, the server responds with either \"Higher\", \"Lower\", or \"Correct!\".\n"
-           "If the client guesses the number correctly, they win the game."
+           "The client connects to the server and is prompted to guess the number.\n"
+           "The client has 10 attempts to guess the number.\n"
+           "After each guess, the server responds with either \"Higher\", \"Lower\", or \"Correct!\".\n"
+           "If the client guesses the number correctly, they win the game.\n"
            "OPTIONS:\n"
            "/q - to quit\n"
            "/m - to message all clients\n\n");
@@ -46,35 +41,31 @@ int main(int argc, char *argv[]) {
 
     char username_message[USERNAME_LEN];
     sprintf(username_message, "username:%s", username);
-    write(clientConnection.socket, username_message, sizeof(username_message));
-    printf("Connected to server\n");
+    write(connection->socket, username_message, sizeof(username_message));
 
     memset(&send_buff, 0, BUFF_LEN);                                // clear memory for send buffer
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);  // make standard input non-blocking
     while (1) {
-        // Create and initialize the read_set with socket and standard input
-        FD_ZERO(&clientConnection.read_set);
-        FD_SET(clientConnection.socket, &clientConnection.read_set);
-        FD_SET(0, &clientConnection.read_set);   // 0 is the file descriptor for standard input
+        // Create and initialize the read_set with server_socket and standard input
+        FD_ZERO(&connection->read_set);
+        FD_SET(connection->socket, &connection->read_set);
+        FD_SET(0, &connection->read_set);   // 0 is the file descriptor for standard input
 
         // Monitor read_set for any incoming data
-        select(clientConnection.socket + 1, &clientConnection.read_set, NULL, NULL, NULL);
-        // Check if the incoming data is from the socket
-        if (FD_ISSET(clientConnection.socket, &clientConnection.read_set)) {
+        select(connection->socket + 1, &connection->read_set, NULL, NULL, NULL);
+        // Check if the incoming data is from the server_socket
+        if (FD_ISSET(connection->socket, &connection->read_set)) {
             memset(&recv_buff, 0, BUFF_LEN);                   // clear the reception buffer
-            read(clientConnection.socket, &recv_buff, BUFF_LEN);  // read the incoming message from socket
+            read(connection->socket, &recv_buff, BUFF_LEN);  // read the incoming message from server_socket
 
             printf("%s", recv_buff);
-        } else if (FD_ISSET(0, &clientConnection.read_set)) {
+        } else if (FD_ISSET(0, &connection->read_set)) {
             fgets(send_buff, BUFF_LEN, stdin);
-            if (strncmp(send_buff, "/q", 2) == 0) {
-                break;
-            }
-            write(clientConnection.socket, send_buff, sizeof(send_buff));
+            write(connection->socket, send_buff, sizeof(send_buff));
         }
     }
 
-    close(clientConnection.socket);
+    close(connection->socket);
     return 0;
 }
 

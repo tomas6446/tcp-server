@@ -22,7 +22,7 @@ void disconnectClient(Client *clients, int client_index) {
 }
 
 Client* initClients() {
-    Client *clients = malloc(MAX_CLIENTS * sizeof (Client));
+    Client *clients = malloc(MAX_CLIENTS * sizeof(Client));
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i].username = malloc(sizeof(char) * 11);
         clients[i].attempts = ATTEMPTS;
@@ -33,7 +33,7 @@ Client* initClients() {
     return clients;
 }
 
-int findEmptyUser(Client client[]) {
+int findEmptyUser(Client *client) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (client[i].socket_fd == -1) {
             return i;

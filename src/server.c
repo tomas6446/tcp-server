@@ -19,7 +19,7 @@ void handleClientInput(Client *clients, long *answer, char *buffer, const Connec
 
 void addClientSocketReadSet(const Client *clients, int *maxfd, Connection *serverConnection);
 
-void serverRun(int *maxfd, struct sockaddr_in *client_addr, char *buffer, Client *clients, Connection *serverConnection, long *answer);
+void serverRun(Client *clients, Connection *serverConnection, long *answer);
 
 void handle_signal(int sig) {
     if (sig == SIGINT) {
@@ -38,40 +38,39 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    int maxfd = 0;
-    struct sockaddr_in client_addr;
-    char buffer[BUFF_LEN];
-
     Client *clients = initClients();
-    Connection serverConnection = createServerConnection(argv);
+    Connection *serverConnection = createServerConnection(argv);
     long *answer = initGame();
 
     /*
      * Main loop to accept incoming connections and read messages from clients
      */
-    serverRun(&maxfd, &client_addr, buffer, clients, &serverConnection, answer);
+    serverRun(clients, serverConnection, answer);
     return 0;
 }
 
-void serverRun(int *maxfd, struct sockaddr_in *client_addr, char *buffer, Client *clients, Connection *serverConnection, long *answer) {
+void serverRun(Client *clients, Connection *serverConnection, long *answer) {
+    int maxfd = 0;
+    struct sockaddr_in client_addr;
+    char buffer[BUFF_LEN];
     while (server_running) {
         // clear the read_set
         FD_ZERO(&(*serverConnection).read_set);
 
         // Add each connected client socket to the read_set and update maxfd
-        addClientSocketReadSet(clients, maxfd, serverConnection);
+        addClientSocketReadSet(clients, &maxfd, serverConnection);
 
         // Add the listening socket to the read_set and update maxfd
         FD_SET((*serverConnection).socket, &(*serverConnection).read_set);
-        if ((*serverConnection).socket > (*maxfd)) {
-            (*maxfd) = (*serverConnection).socket;
+        if ((*serverConnection).socket > maxfd) {
+            maxfd = (*serverConnection).socket;
         }
 
         // Wait for activity on any of the file descriptors in the read_set
-        select((*maxfd) + 1, &(*serverConnection).read_set, NULL, NULL, NULL);
+        select(maxfd + 1, &(*serverConnection).read_set, NULL, NULL, NULL);
 
         // Check if a new client is connecting and accept the serverConnection
-        acceptServerConnection(client_addr, clients, buffer, serverConnection);
+        acceptServerConnection(&client_addr, clients, buffer, serverConnection);
         handleClientInput(clients, answer, buffer, serverConnection);
     }
     cleanupClients(clients);
@@ -94,9 +93,9 @@ void handleClientInput(Client *clients, long *answer, char *buffer, const Connec
     for (int i = 0; i < MAX_CLIENTS; i++) {
         if (clients[i].socket_fd != -1 && FD_ISSET(clients[i].socket_fd, &(*serverConnection).read_set)) {
             memset(buffer, 0, BUFF_LEN);
-            long recv_length = recv(clients[i].socket_fd, buffer, BUFF_LEN, 0);
+            recv(clients[i].socket_fd, buffer, BUFF_LEN, 0);
 
-            if (recv_length <= 0 || strncmp(buffer, "\\q\n", 2) == 0) {
+            if (strncmp(buffer, "\\q\n", 2) == 0) {
                 disconnectClient(clients, i);
             } else if (strncmp(buffer, "\\m\n", 2) == 0) {
                 messageAllClients(clients, buffer);
@@ -104,7 +103,6 @@ void handleClientInput(Client *clients, long *answer, char *buffer, const Connec
                 handleGuess(clients, i, buffer, answer);
             }
         }
-
     }
 }
 
@@ -116,14 +114,13 @@ void acceptServerConnection(struct sockaddr_in *client_addr, Client *clients, ch
             memset(client_addr, 0, addr_length);
             clients[client_id].socket_fd = accept((*serverConnection).socket,
                                                   (struct sockaddr *) client_addr, &addr_length);
-            printf("Connected:  %s\n", inet_ntoa((*client_addr).sin_addr));
+            printf("Connected: %s with ", inet_ntoa((*client_addr).sin_addr));
 
             // receive username at the start of the client program
             recv(clients[client_id].socket_fd, buffer, USERNAME_LEN, 0);
             if (strncmp(buffer, "username:", 9) == 0) {
-                char username[11];
-                strcpy(username, buffer + 9);
-                clients[client_id].username = username;
+                strcpy(clients[client_id].username, buffer + 9);
+                printf("username: %s\n", clients[client_id].username);
             }
         }
     }
