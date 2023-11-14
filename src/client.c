@@ -7,17 +7,36 @@
 #include <regex.h>
 #include <unistd.h>
 #include <slcurses.h>
+#include <bits/signum-generic.h>
+#include <signal.h>
 
 #include "../headers/connection.h"
 
 #define BUFF_LEN 1024
 #define USERNAME_LEN 20
 
+volatile sig_atomic_t client_running = 1;
+
 bool validateUsername(const char *username);
 
 void handleData(const Connection *connection, char *recv_buff, char *send_buff);
 
+void handle_signal(int sig);
+
+void runClient(char *argv[]);
+
 int main(int argc, char *argv[]) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = &handle_signal;
+    sigaction(SIGINT, &sa, NULL);
+
+
+    runClient(argv);
+    return 0;
+}
+
+void runClient(char *argv[]) {
     Connection *connection = createClientConnection(argv);
 
     char username[USERNAME_LEN];
@@ -48,7 +67,7 @@ int main(int argc, char *argv[]) {
 
     memset(&send_buff, 0, BUFF_LEN);                                // clear memory for send buffer
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);  // make standard input non-blocking
-    while (1) {
+    while (client_running) {
         // Create and initialize the read_set with server_socket and standard input
         FD_ZERO(&connection->read_set);
         FD_SET(connection->socket, &connection->read_set);
@@ -61,7 +80,6 @@ int main(int argc, char *argv[]) {
     }
 
     close(connection->socket);
-    return 0;
 }
 
 void handleData(const Connection *connection, char *recv_buff, char *send_buff) {
@@ -94,5 +112,11 @@ bool validateUsername(const char *username) {
     } else {
         fprintf(stderr, "Could not compile regex\n");
         exit(EXIT_FAILURE);
+    }
+}
+
+void handle_signal(int sig) {
+    if (sig == SIGINT) {
+        client_running = 0;
     }
 }

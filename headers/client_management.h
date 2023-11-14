@@ -5,16 +5,20 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <string.h>
+#include <netinet/in.h>
 
 #define MAX_CLIENTS 10
 #define USERNAME_LEN 20
 
 typedef struct {
-    int socket_fd;
+
     int attempts;
     int win_count;
     int won;
     char *username;
+
+    struct sockaddr_in addr;
+    int socket_fd;
 } Client;
 
 Client* initClients();

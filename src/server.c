@@ -15,25 +15,21 @@ volatile sig_atomic_t server_running = 1;
 
 void updateMaxFd(int fd, int *maxfd);
 
-void processSelect(Client *clients, long *answer, char *buffer, Connection *serverConnection, struct sockaddr_in client_addr);
+void processSelect(Client *clients, long *answer, char *buffer, Connection *serverConnection);
 
 void addClientSocketReadSet(const Client *clients, int *maxfd, fd_set *read_set);
 
-void acceptConnection(int client_id, int serverSocket, struct sockaddr_in *client_addr, Client *clients);
+void acceptConnection(int client_id, int serverSocket, Client *clients);
 
 void initializeClient(int client_id, Client *clients, char *buffer);
 
-void serverRun(Client *clients, Connection *serverConnection, long *answer);
+void serverRun(char *argv[]);
 
-void acceptServerConnection(Client *clients, char *buffer, Connection *serverConnection, struct sockaddr_in client_addr);
+void acceptServerConnection(Client *clients, char *buffer, Connection *serverConnection);
 
 void handleClientInput(Client *clients, long *answer, char *buffer, const Connection *serverConnection);
 
-void handle_signal(int sig) {
-    if (sig == SIGINT) {
-        server_running = 0;
-    }
-}
+void handle_signal(int sig);
 
 int main(int argc, char *argv[]) {
     struct sigaction sa;
@@ -46,14 +42,10 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    Client *clients = initClients();
-    Connection *serverConnection = createServerConnection(argv);
-    long *answer = initGame();
-
     /*
      * Main loop to accept incoming connections and read messages from clients
      */
-    serverRun(clients, serverConnection, answer);
+    serverRun(argv);
     return 0;
 }
 
@@ -72,18 +64,18 @@ void addClientSocketReadSet(const Client *clients, int *maxfd, fd_set *read_set)
     }
 }
 
-void processSelect(Client *clients, long *answer, char *buffer, Connection *serverConnection, struct sockaddr_in client_addr) {
+void processSelect(Client *clients, long *answer, char *buffer, Connection *serverConnection) {
     if (FD_ISSET(serverConnection->socket, &serverConnection->read_set)) {
-        acceptServerConnection(clients, buffer, serverConnection, client_addr);
+        acceptServerConnection(clients, buffer, serverConnection);
     }
     handleClientInput(clients, answer, buffer, serverConnection);
 }
 
-void acceptConnection(int client_id, int serverSocket, struct sockaddr_in *client_addr, Client *clients) {
-    unsigned int addr_length = sizeof(*client_addr);
-    memset(client_addr, 0, addr_length);
-    clients[client_id].socket_fd = accept(serverSocket, (struct sockaddr *) client_addr, &addr_length);
-    printf("Connected: %s with ", inet_ntoa((*client_addr).sin_addr));
+void acceptConnection(int client_id, int serverSocket, Client *clients) {
+    unsigned int addr_length = sizeof(clients[client_id].addr);
+    memset(&clients[client_id].addr, 0, addr_length);
+    clients[client_id].socket_fd = accept(serverSocket, (struct sockaddr *) &clients[client_id].addr, &addr_length);
+    printf("Connected: %s with ", inet_ntoa(clients[client_id].addr.sin_addr));
 }
 
 void initializeClient(int client_id, Client *clients, char *buffer) {
@@ -99,10 +91,10 @@ void initializeClient(int client_id, Client *clients, char *buffer) {
 }
 
 
-void acceptServerConnection(Client *clients, char *buffer, Connection *serverConnection, struct sockaddr_in client_addr) {
+void acceptServerConnection(Client *clients, char *buffer, Connection *serverConnection) {
     int client_id = findEmptyUser(clients);
     if (client_id != -1) {
-        acceptConnection(client_id, serverConnection->socket, &client_addr, clients);
+        acceptConnection(client_id, serverConnection->socket, clients);
         initializeClient(client_id, clients, buffer);
     }
 }
@@ -124,10 +116,14 @@ void handleClientInput(Client *clients, long *answer, char *buffer, const Connec
     }
 }
 
-void serverRun(Client *clients, Connection *serverConnection, long *answer) {
+void serverRun(char *argv[]) {
+    printf("Server running...\n");
+
+    Client *clients = initClients();
+    Connection *serverConnection = createServerConnection(argv);
     int maxfd = serverConnection->socket;
-    struct sockaddr_in client_addr;
     char buffer[BUFF_LEN];
+    long *answer = initGame();
 
     while (server_running) {
         FD_ZERO(&serverConnection->read_set);
@@ -136,10 +132,16 @@ void serverRun(Client *clients, Connection *serverConnection, long *answer) {
         FD_SET(serverConnection->socket, &serverConnection->read_set);
 
         select(maxfd + 1, &serverConnection->read_set, NULL, NULL, NULL);
-        processSelect(clients, answer, buffer, serverConnection, client_addr);
+        processSelect(clients, answer, buffer, serverConnection);
     }
 
     cleanupClients(clients);
     close(serverConnection->socket);
     free(answer);
+}
+
+void handle_signal(int sig) {
+    if (sig == SIGINT) {
+        server_running = 0;
+    }
 }
