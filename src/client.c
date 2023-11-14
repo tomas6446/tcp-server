@@ -15,6 +15,8 @@
 
 bool validateUsername(const char *username);
 
+void handleData(const Connection *connection, char **recv_buff, char *send_buff);
+
 int main(int argc, char *argv[]) {
     Connection *connection = createClientConnection(argv);
 
@@ -55,19 +57,23 @@ int main(int argc, char *argv[]) {
         // Monitor read_set for any incoming data
         select(connection->socket + 1, &connection->read_set, NULL, NULL, NULL);
         // Check if the incoming data is from the server_socket
-        if (FD_ISSET(connection->socket, &connection->read_set)) {
-            memset(&recv_buff, 0, BUFF_LEN);                   // clear the reception buffer
-            read(connection->socket, &recv_buff, BUFF_LEN);  // read the incoming message from server_socket
-
-            printf("%s", recv_buff);
-        } else if (FD_ISSET(0, &connection->read_set)) {
-            fgets(send_buff, BUFF_LEN, stdin);
-            write(connection->socket, send_buff, sizeof(send_buff));
-        }
+        handleData(connection, &recv_buff, send_buff);
     }
 
     close(connection->socket);
     return 0;
+}
+
+void handleData(const Connection *connection, char **recv_buff, char *send_buff) {
+    if (FD_ISSET(connection->socket, &connection->read_set)) {
+        memset(recv_buff, 0, BUFF_LEN);                   // clear the reception buffer
+        read(connection->socket, recv_buff, BUFF_LEN);  // read the incoming message from server_socket
+
+        printf("%s", (*recv_buff));
+    } else if (FD_ISSET(0, &connection->read_set)) {
+        fgets(send_buff, BUFF_LEN, stdin);
+        write(connection->socket, send_buff, sizeof(send_buff));
+    }
 }
 
 bool validateUsername(const char *username) {
