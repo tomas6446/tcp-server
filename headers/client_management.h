@@ -11,10 +11,8 @@
 #define USERNAME_LEN 20
 
 typedef struct {
-
     int attempts;
-    int win_count;
-    int won;
+    int winCount;
     char *username;
 
     struct sockaddr_in addr;

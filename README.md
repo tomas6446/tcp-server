@@ -12,26 +12,16 @@ To compile the program:
 gcc -o server src/server.c src/game.c src/connection.c src/client_management.c -lpthread
 gcc -o client src/client.c src/connection.c -lpthread
  ```
-To run the program:
+### Run the server on port 5000
 ``` bash
-# Run the server
-./server <server-port>
-# Run the client
-./client <server-ip> <server-port>
+./server 5000
 ```
-
-
-To start the server:
+### To run the client on localhost and port 5000:
 ``` bash
-./server <server-port>
-```
-To start a client and connect to the server:
-``` bash
-./client <server-ip> <server-port>
+./client 127.0.0.1 5000
 ```
 
 ## Options
-
 The following options are available for the client:
 
     /q - Quit the game

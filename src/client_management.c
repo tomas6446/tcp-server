@@ -30,8 +30,7 @@ Client* initClients() {
     for (int i = 0; i < MAX_CLIENTS; i++) {
         clients[i].username = malloc(sizeof(char) * 11);
         clients[i].attempts = ATTEMPTS;
-        clients[i].won = 0;
-        clients[i].win_count = 0;
+        clients[i].winCount = 0;
         clients[i].socket_fd = -1;
     }
     return clients;

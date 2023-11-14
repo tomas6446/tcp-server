@@ -1,16 +1,8 @@
 #include "../headers/game.h"
 
-
 long randomize(int lower, int upper) {
     srand(time(NULL));
     return (rand() % (upper - lower + 1)) + lower;
-}
-
-long *initGame() {
-    long *answer = malloc(sizeof(long));
-    *answer = randomize(LOWER, UPPER);
-    printf("Answer: %ld\n", *answer);
-    return answer;
 }
 
 int isDigit(char *buffer) {
@@ -35,7 +27,7 @@ int isGuessCorrect(int guess, long answer) {
 
 void updateClientStatus(Client *client, int win) {
     if (win) {
-        client->won++;
+        client->winCount++;
     }
     client->attempts--;
 }
@@ -46,47 +38,44 @@ void sendAttemptsLeftMessage(Client client, char *buffer) {
     sendMessage(client, buffer);
 }
 
-void resetGame(long *answer, Client *client, char buffer[]) {
+void resetGame(long *answer, Client *client) {
     *answer = randomize(LOWER, UPPER);
     printf("Answer: %ld\n", *answer);
-    client->attempts = ATTEMPTS;
-    sendAttemptsLeftMessage(*client, buffer);
-}
-
-void sendWinMessage(Client *client, char *buffer) {
-    strcpy(buffer, "WIN");
-    updateClientStatus(client, 1);
-    sendAttemptsLeftMessage(*client, buffer);
-}
-
-void sendGameOverMessage(Client client, char *buffer) {
-    strcpy(buffer, "No attempts left\n");
-    sendMessage(client, buffer);
-}
-
-void resetGameIfWinExists(long *answer, Client clients[], int win_exists, char buffer[]) {
-    if (win_exists) {
-        for (int j = 0; j < MAX_CLIENTS; j++) {
-            if (clients[j].socket_fd != -1) {
-                resetGame(answer, &clients[j], buffer);
-            }
+    char buffer[] = "You have: 10 attempts\n";
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (client[i].socket_fd != -1) {
+            client->attempts = ATTEMPTS;
+            sendMessage(client[i], buffer);
         }
     }
+}
+
+void sendClientWinMessage(Client *clients, Client *winner) {
+    updateClientStatus(winner, 1);
+    char *buffer = malloc(sizeof(char) * BUFF_LEN);
+    sprintf(buffer, "%s won the game. Win count = [%d].\n",
+            winner->username,
+            winner->winCount);
+    messageAllClients(clients, buffer);
+}
+
+void sendGameOverMessage(Client client) {
+    char buffer[] = "No attempts left\n";
+    sendMessage(client, buffer);
 }
 
 // Refactored handleGuess function
 void handleGuess(Client *clients, int client_index, char buffer[], long *answer) {
     Client *client = &clients[client_index];
-    int win_exists = 0;
 
     // Game over condition
     if (client->attempts == 1) {
-        sendGameOverMessage(*client, buffer);
+        sendGameOverMessage(*client);
         return;
     }
 
     if (!isDigit(buffer)) {
-        strcpy(buffer, "Not a number");
+        strcpy(buffer, "Not a number\n");
         sendMessage(*client, buffer);
         return;
     }
@@ -95,15 +84,12 @@ void handleGuess(Client *clients, int client_index, char buffer[], long *answer)
     int guessResult = isGuessCorrect(guess, *answer);
 
     if (guessResult == 0) {
-        sendWinMessage(client, buffer);
-        win_exists = 1;
+        sendClientWinMessage(clients, client);
+        resetGame(answer, client);
     } else {
         strcpy(buffer, guessResult < 0 ? "HIGHER" : "LOWER");
         updateClientStatus(client, 0);
         sendAttemptsLeftMessage(*client, buffer);
         printf("Message received from %s: %d %s", client->username, guess, buffer);
     }
-
-    // Broadcast game reset if there's a win
-    resetGameIfWinExists(answer, clients, win_exists, buffer);
 }

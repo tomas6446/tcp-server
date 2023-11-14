@@ -7,7 +7,6 @@
 #include <regex.h>
 #include <unistd.h>
 #include <slcurses.h>
-#include <bits/signum-generic.h>
 #include <signal.h>
 
 #include "../headers/connection.h"

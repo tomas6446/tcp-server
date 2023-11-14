@@ -123,7 +123,8 @@ void serverRun(char *argv[]) {
     Connection *serverConnection = createServerConnection(argv);
     int maxfd = serverConnection->socket;
     char buffer[BUFF_LEN];
-    long *answer = initGame();
+    long *answer = malloc(sizeof(long));
+    resetGame(answer, clients);
 
     while (server_running) {
         FD_ZERO(&serverConnection->read_set);
