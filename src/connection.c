@@ -1,11 +1,6 @@
 #include "../headers/connection.h"
 
-unsigned int validatePort(int argc, char *const *argv) {
-    if (argc != 3) {
-        fprintf(stderr, "USAGE: %s <ip> <port>\n", argv[0]);
-        exit(1);
-    }
-    unsigned int port = atoi(argv[2]);
+unsigned int validatePort(unsigned int port) {
     if ((port < 1) || (port > 65535)) {
         printf("ERROR #1: invalid port specified.\n");
         exit(1);
@@ -22,23 +17,30 @@ int createSocket() {
     return server_socket;
 }
 
-void createAddressFamily(unsigned int port, Connection *connection) {
-    memset(&(*connection).server_addr, 0, sizeof((*connection).server_addr));
-    (*connection).server_addr.sin_family = AF_INET;
-    (*connection).server_addr.sin_port = htons(port);
+void createClientAddressFamily(Connection *connection) {
+    memset(&(*connection).addr, 0, sizeof((*connection).addr));
+    (*connection).addr.sin_family = AF_INET;
+    (*connection).addr.sin_port = htons(connection->port);
 }
 
-Connection createClientConnection(int argc, char *const *argv) {
+void createServerAddressFamily(Connection *connection) {
+    createClientAddressFamily(connection);
+    (*connection).addr.sin_addr.s_addr = htonl(INADDR_ANY);
+}
+
+
+Connection createClientConnection(char *const *argv) {
+    unsigned int port = atoi(argv[2]);
     Connection connection;
-    connection.port = validatePort(argc, argv);
-    connection.server_socket = createSocket();
-    createAddressFamily(connection.port, &connection);
+    connection.port = validatePort(port);
+    connection.socket = createSocket();
+    createClientAddressFamily(&connection);
 
     /*
      * Convert IP address from string to binary form
-     * and store in server_addr.sin_addr
+     * and store in addr.sin_addr
      */
-    if (inet_aton(argv[1], &connection.server_addr.sin_addr) <= 0) {
+    if (inet_aton(argv[1], &connection.addr.sin_addr) <= 0) {
         fprintf(stderr, "ERROR #3: Invalid remote IP address.\n");
         exit(1);
     }
@@ -46,8 +48,37 @@ Connection createClientConnection(int argc, char *const *argv) {
     /*
      * Connect to server
      */
-    if (connect(connection.server_socket, (struct sockaddr *) &connection.server_addr, sizeof(connection.server_addr)) < 0) {
+    if (connect(connection.socket, (struct sockaddr *) &connection.addr, sizeof(connection.addr)) < 0) {
         fprintf(stderr, "ERROR #4: error in connect().\n");
+        exit(1);
+    }
+
+    return connection;
+}
+
+Connection createServerConnection(char *const *argv) {
+    unsigned int port = atoi(argv[1]);
+    Connection connection;
+    connection.port = validatePort(port);
+    connection.socket = createSocket();
+    createServerAddressFamily(&connection);
+
+    int yes = 1;
+    if (setsockopt(connection.socket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1) {
+        fprintf(stderr, "ERROR #3: bind listening socket.\n");
+        exit(1);
+    }
+
+    if (bind(connection.socket, (struct sockaddr *) &connection.addr, sizeof(connection.addr)) < 0) {
+        fprintf(stderr, "ERROR #3: bind listening socket.\n");
+        exit(1);
+    }
+
+    /*
+     * Start listening for incoming connections
+     */
+    if (listen(connection.socket, 5) < 0) {
+        fprintf(stderr, "ERROR #4: error in listen().\n");
         exit(1);
     }
 

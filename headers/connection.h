@@ -9,16 +9,20 @@
 
 typedef struct {
     unsigned int port;
-    int server_socket;
+    int socket;
 
-    struct sockaddr_in server_addr;     // struct to hold server address information
+    struct sockaddr_in addr;     // struct to hold server address information
     fd_set read_set;
 } Connection;
 
-unsigned int validatePort(int argc, char *const *argv);
-
 int createSocket();
 
-void createAddressFamily(unsigned int port, Connection *connection);
+unsigned int validatePort(unsigned int port);
 
-Connection createClientConnection(int argc, char *const *argv);
+void createClientAddressFamily(Connection *connection);
+
+void createServerAddressFamily(Connection *connection);
+
+Connection createClientConnection(char *const *argv);
+
+Connection createServerConnection(char *const *argv);
