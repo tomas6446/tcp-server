@@ -13,7 +13,7 @@
 #define BUFF_LEN 1024
 #define USERNAME_LEN 20
 
-bool validateUsername(char username[20]);
+bool validateUsername(const char *username);
 
 int main(int argc, char *argv[]) {
     Connection *connection = createClientConnection(argv);
@@ -42,6 +42,7 @@ int main(int argc, char *argv[]) {
     char username_message[USERNAME_LEN];
     sprintf(username_message, "username:%s", username);
     write(connection->socket, username_message, sizeof(username_message));
+    printf("%s. Connected to server\n", username);
 
     memset(&send_buff, 0, BUFF_LEN);                                // clear memory for send buffer
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);  // make standard input non-blocking
@@ -69,7 +70,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-bool validateUsername(char username[USERNAME_LEN]) {
+bool validateUsername(const char *username) {
     regex_t regex;
     if (regcomp(&regex, "^[A-Za-z0-9_]{3,11}$", REG_EXTENDED) == 0) {
         if (regexec(&regex, username, 0, NULL, 0) != 0) {
