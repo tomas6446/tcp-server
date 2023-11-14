@@ -9,8 +9,17 @@ If the client guesses the number correctly, they win the game.
 ## Usage
 To compile the program:
 ``` bash
-gcc -o server src/server.c src/connection.c src/game.c src/client_management.c
-gcc -o client src/client.c src/connection.c 
+# Create a build directory
+mkdir build
+# Navigate to the build directory
+cd build
+# Run cmake and make
+cmake ..
+make
+# Run the server
+./server <server-port>
+# Run the client
+./client <server-ip> <server-port>
 ```
 
 

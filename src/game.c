@@ -1,14 +1,15 @@
-#include <sys/time.h>
 #include "../headers/game.h"
 
-long* initGame() {
-    struct timeval time;
-    gettimeofday(&time,NULL);
-    srand((time.tv_sec * 1000) + (time.tv_usec / 1000));
 
-    long *answer = malloc(sizeof(int));
+long randomize(int lower, int upper) {
+    srand(time(NULL));
+    return (rand() % (upper - lower + 1)) + lower;
+}
+
+long *initGame() {
+    long *answer = malloc(sizeof(long));
     *answer = randomize(LOWER, UPPER);
-    printf("The answer is %ld\n", *answer);
+    printf("Answer: %ld\n", *answer);
     return answer;
 }
 
@@ -22,59 +23,86 @@ int isDigit(char *buffer) {
     return 1;
 }
 
-long randomize(int lower, int upper) {
-    return (rand() % (upper - lower + 1)) + lower;
+int isGuessCorrect(int guess, long answer) {
+    if (guess < answer) {
+        return -1; // Guess is lower than the answer
+    } else if (guess > answer) {
+        return 1; // Guess is higher than the answer
+    } else {
+        return 0; // Guess is correct
+    }
 }
 
-void handleGuess(Client *clients, int client_index, char buffer[BUFF_LEN], long *answer) {
-    int win_exists = 0;
-
-    if (clients[client_index].attempts > 1 && !clients[client_index].won) {
-        if (isDigit(buffer)) {
-            int g = atoi(buffer);
-            if (g < *answer) {
-                strcpy(buffer, "HIGHER");
-            } else if (g > *answer) {
-                strcpy(buffer, "LOWER");
-            } else {
-                strcpy(buffer, "WIN");
-                clients[client_index].won = 1;
-                win_exists = 1;
-            }
-            clients[client_index].attempts--;
-        } else {
-            strcpy(buffer, "Not a number");
-        }
-
-        char attempts_left[20];
-        sprintf(attempts_left, " (%d attempts left)\n", clients[client_index].attempts);
-        strcat(buffer, attempts_left);
-        printf("Message received from %s: %s", clients[client_index].username, buffer);
-    } else if (clients[client_index].attempts == 1) {
-        strcpy(buffer, "No attempts left\n");
+void updateClientStatus(Client *client, int win) {
+    if (win) {
+        client->won++;
     }
-    sendMessage(clients[client_index], buffer);
+    client->attempts--;
+}
 
-    for (int j = 0; j < MAX_CLIENTS; j++) {
-        if (clients[j].socket_fd != -1) {
-            if (win_exists) {
+
+void sendAttemptsLeftMessage(Client client, char *buffer) {
+    sprintf(buffer, "%s (%d attempts left)\n", buffer, client.attempts);
+    sendMessage(client, buffer);
+}
+
+void resetGame(long *answer, Client *client, char buffer[]) {
+    *answer = randomize(LOWER, UPPER);
+    printf("Answer: %ld\n", *answer);
+    client->attempts = ATTEMPTS;
+    sendAttemptsLeftMessage(*client, buffer);
+}
+
+void sendWinMessage(Client *client, char *buffer) {
+    strcpy(buffer, "WIN");
+    updateClientStatus(client, 1);
+    sendAttemptsLeftMessage(*client, buffer);
+}
+
+void sendGameOverMessage(Client client, char *buffer) {
+    strcpy(buffer, "No attempts left\n");
+    sendMessage(client, buffer);
+}
+
+void resetGameIfWinExists(long *answer, Client clients[], int win_exists, char buffer[]) {
+    if (win_exists) {
+        for (int j = 0; j < MAX_CLIENTS; j++) {
+            if (clients[j].socket_fd != -1) {
                 resetGame(answer, &clients[j], buffer);
             }
         }
     }
 }
 
-void resetGame(long *answer, Client *client, char buffer[BUFF_LEN]) {
-    if (client->won) {
-        client->win_count++;
-        client->won = 0;
-    }
-    client->attempts = ATTEMPTS; // reset attempts
-    *answer = randomize(LOWER, UPPER); // reset number
+// Refactored handleGuess function
+void handleGuess(Client *clients, int client_index, char buffer[], long *answer) {
+    Client *client = &clients[client_index];
+    int win_exists = 0;
 
-    sprintf(buffer, "%s won the game with win count of %d. New number generated.\n",
-            client->username,
-            client->win_count);
-    printf("The answer is %ld\n", *answer);
-    sendMessage(*client, buffer);
+    // Game over condition
+    if (client->attempts == 1) {
+        sendGameOverMessage(*client, buffer);
+        return;
+    }
+
+    if (!isDigit(buffer)) {
+        strcpy(buffer, "Not a number");
+        sendMessage(*client, buffer);
+        return;
+    }
+
+    int guess = atoi(buffer);
+    int guessResult = isGuessCorrect(guess, *answer);
+
+    if (guessResult == 0) {
+        sendWinMessage(client, buffer);
+        win_exists = 1;
+    } else {
+        strcpy(buffer, guessResult < 0 ? "HIGHER" : "LOWER");
+        updateClientStatus(client, 0);
+        sendAttemptsLeftMessage(*client, buffer);
+    }
+
+    // Broadcast game reset if there's a win
+    resetGameIfWinExists(answer, clients, win_exists, buffer);
 }

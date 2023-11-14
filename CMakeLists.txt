@@ -17,5 +17,18 @@ add_executable(server
         headers/game.h
         src/client_management.c
         headers/client_management.h
-        src/client.c
+)
+
+add_custom_target(
+        run_client
+        COMMAND ./client 127.0.0.1 5000
+        DEPENDS client
+        WORKING_DIRECTORY ${CMAKE_PROJECT_DIR}
+)
+
+add_custom_target(
+        run_server
+        COMMAND ./server 5000
+        DEPENDS server
+        WORKING_DIRECTORY ${CMAKE_PROJECT_DIR}
 )

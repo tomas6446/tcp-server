@@ -13,11 +13,23 @@
 
 #define BUFF_LEN 1024
 
-long* initGame();
+long *initGame();
 
-void resetGame(long *answer, Client *client, char buffer[BUFF_LEN]);
+void handleGuess(Client *clients, int client_index, char buffer[], long *answer);
 
-void handleGuess(Client *clients, int client_index, char buffer[BUFF_LEN], long *answer);
+void updateClientStatus(Client *client, int win);
+
+int isGuessCorrect(int guess, long answer);
+
+void sendAttemptsLeftMessage(Client client, char *buffer);
+
+void sendWinMessage(Client *client, char *buffer);
+
+void sendGameOverMessage(Client client, char *buffer);
+
+void resetGameIfWinExists(long *answer, Client clients[], int win_exists, char buffer[]);
+
+void resetGame(long *answer, Client *client, char buffer[]);
 
 long randomize(int lower, int upper);
 
