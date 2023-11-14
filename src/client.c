@@ -73,6 +73,11 @@ void handleData(const Connection *connection, char *recv_buff, char *send_buff) 
     } else if (FD_ISSET(0, &connection->read_set)) {
         fgets(send_buff, BUFF_LEN, stdin);
         write(connection->socket, send_buff, sizeof(send_buff));
+
+        if (strncmp(send_buff, "/q", 2) == 0) {
+            shutdown(connection->socket, SHUT_RDWR);
+            exit(0);
+        }
     }
 }
 

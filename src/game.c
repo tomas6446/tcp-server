@@ -101,6 +101,7 @@ void handleGuess(Client *clients, int client_index, char buffer[], long *answer)
         strcpy(buffer, guessResult < 0 ? "HIGHER" : "LOWER");
         updateClientStatus(client, 0);
         sendAttemptsLeftMessage(*client, buffer);
+        printf("Message received from %s: %d %s", client->username, guess, buffer);
     }
 
     // Broadcast game reset if there's a win

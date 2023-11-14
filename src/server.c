@@ -95,10 +95,10 @@ void handleClientInput(Client *clients, long *answer, char *buffer, const Connec
             memset(buffer, 0, BUFF_LEN);
             recv(clients[i].socket_fd, buffer, BUFF_LEN, 0);
 
-            if (strncmp(buffer, "\\q\n", 2) == 0) {
+            if (strncmp(buffer, "/q", 2) == 0) {
                 disconnectClient(clients, i);
-            } else if (strncmp(buffer, "\\m\n", 2) == 0) {
-                messageAllClients(clients, buffer);
+            } else if (strncmp(buffer, "/m", 2) == 0) {
+                messageAllClients(clients, buffer + 2);
             } else {
                 handleGuess(clients, i, buffer, answer);
             }
@@ -119,8 +119,12 @@ void acceptServerConnection(struct sockaddr_in *client_addr, Client *clients, ch
             // receive username at the start of the client program
             recv(clients[client_id].socket_fd, buffer, USERNAME_LEN, 0);
             if (strncmp(buffer, "username:", 9) == 0) {
+                clients[client_id].username = malloc(sizeof(char) * USERNAME_LEN);
                 strcpy(clients[client_id].username, buffer + 9);
                 printf("username: %s\n", clients[client_id].username);
+
+                buffer = malloc(sizeof(char) * BUFF_LEN);
+                sendAttemptsLeftMessage(clients[client_id], buffer);
             }
         }
     }

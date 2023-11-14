@@ -1,6 +1,10 @@
+#include <slcurses.h>
+#include <stdbool.h>
 #include "../headers/client_management.h"
 #include "../headers/game.h"
 
+
+bool isMessageEmpty(const char *buffer);
 
 void cleanupClients(Client *clients) {
     for (int i = 0; i < MAX_CLIENTS; i++) {
@@ -44,9 +48,24 @@ int findEmptyUser(Client *client) {
 
 
 void messageAllClients(Client *clients, const char *buffer) {
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        sendMessage(clients[i], buffer + 2);
+    if(!isMessageEmpty(buffer)) {
+        printf("Sending message: %s to {", buffer);
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i].socket_fd != -1) {
+                printf("%s(%d), ", clients[i].username, clients[i].socket_fd);
+                sendMessage(clients[i], buffer);
+            }
+        }
+        printf("}\n");
     }
+}
+
+bool isMessageEmpty(const char *buffer) {
+    bool isMessageEmpty = false;
+    if(buffer == NULL || strlen(buffer) == 0 || strncmp(buffer, "\n", 1) == 0 || strncmp(buffer, " ", 1) == 0) {
+        isMessageEmpty = true;
+    }
+    return isMessageEmpty;
 }
 
 void sendMessage(Client client_socket, const char *buffer) {
